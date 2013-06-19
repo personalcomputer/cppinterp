@@ -123,7 +123,7 @@ def determine_if_code_needs_main(code): #Determine if the code is a declaration/
     return False
   if re.match(r'\s*[a-zA-Z0-9_]+[ \*]*[a-zA-Z0-9_]+ ?\(([a-zA-Z0-9_]+[ \*]*[a-zA-Z0-9_]+,?)*\)', code): #function declaration or definition
     return False
-  if re.match(r'\s*(class|typedef|namespace|template)', code): #look for keywords
+  if re.match(r'\s*(class|typedef|namespace|template|enum)', code): #look for keywords
      return False
   return True
 
@@ -224,7 +224,7 @@ def main():
           else:
             outmain_code_history += parse_persistant_code(new_code)
 
-  except KeyboardInterrupt:
+  except (KeyboardInterrupt, EOFError):
     print('')
 
 
