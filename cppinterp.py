@@ -21,8 +21,7 @@ TEMP_BIN_FILENAME = TEMP_DIRECTORY+'/cppinterp.run'
 TEMP_ERRLOG_FILENAME = TEMP_DIRECTORY+'/cxx_err.log'
 TEMP_OUTLOG_FILENAME = TEMP_DIRECTORY+'/cxx_out.log'
 
-CODEWRAP_TOP = '''#include <iostream>
-using namespace std;
+CODEWRAP_TOP = '''using namespace std;
 '''
 CODEWRAP_MID = '''int main()
 {
@@ -151,8 +150,8 @@ def determine_needed_headers(code): #hueristic to speed things up
   needed_headers = set([])
   if re.search('(std::)?string ', code):
     needed_headers.add('#include <string>')
-  #if re.search('(std::)?(cout|endl|cin)', code):
-  #  needed_headers.add('#include <iostream>')
+  if re.search('(std::)?(cout|endl|cin)', code):
+    needed_headers.add('#include <iostream>')
   if re.search('(std::)?stringstream ', code):
     needed_headers.add('#include <sstream>')
   if re.search('printf\(', code):
