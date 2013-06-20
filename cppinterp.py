@@ -9,25 +9,25 @@ import subprocess
 import re
 import readline
 
-temp_directory = '/tmp/cppinterp'
-temp_src_filename_nopath = 'cppinterp.cpp'
-temp_src_filename = temp_directory+'/'+temp_src_filename_nopath
-temp_bin_filename = temp_directory+'/cppinterp.run'
-temp_errlog_filename = temp_directory+'/cxx_err.log'
-temp_outlog_filename = temp_directory+'/cxx_out.log'
+TEMP_DIRECTORY = '/tmp/cppinterp'
+TEMP_SRC_FILENAME_NOPATH = 'cppinterp.cpp'
+TEMP_SRC_FILENAME = TEMP_DIRECTORY+'/'+TEMP_SRC_FILENAME_NOPATH
+TEMP_BIN_FILENAME = TEMP_DIRECTORY+'/cppinterp.run'
+TEMP_ERRLOG_FILENAME = TEMP_DIRECTORY+'/cxx_err.log'
+TEMP_OUTLOG_FILENAME = TEMP_DIRECTORY+'/cxx_out.log'
 
-extra_gcc_flags = []#, '-std=c++11']
+EXTRA_GCC_FLAGS = []#, '-std=c++11']
 
-codewrap_top = '''using namespace std;
+CODEWRAP_TOP = '''using namespace std;
 '''
-codewrap_mid = '''int main()
+CODEWRAP_MID = '''int main()
 {
 '''
-codewrap_bottom = '''  return 0;
+CODEWRAP_BOTTOM = '''  return 0;
 }
 '''
-codewrap_top_tot_lines = len(codewrap_top.split('\n'))
-codewrap_mid_tot_lines = len(codewrap_mid.split('\n'))
+CODEWRAP_TOP_TOT_LINES = len(CODEWRAP_TOP.split('\n'))
+CODEWRAP_MID_TOT_LINES = len(CODEWRAP_MID.split('\n'))
 
 OS_CLEAR_CMD = {'nt':'cls', 'posix':'clear'}[os.name]
 
@@ -37,7 +37,7 @@ def clean_gcc_error_from_wrapped_code(error, src):
   src_tot_lines = len(src_lines)
 
   #error = error[:error.rfind('\n')]
-  error = re.sub('('+temp_src_filename+'|'+temp_src_filename_nopath+r'):', '', error)
+  error = re.sub('('+TEMP_SRC_FILENAME+'|'+TEMP_SRC_FILENAME_NOPATH+r'):', '', error)
   error = re.sub(r' In function ‘int main\(\)’:\n', '', error)
 
   #Completely rewrite any errors that look like "error: expected ‘;’ before ‘return’" so that they make sense within the contex tof what the user wrote, dropping the reference to return statement they didn't write.
@@ -54,25 +54,25 @@ def strip_make_output(compile_output):
   return compile_output
 
 def execute_wrapped_code(uses_custom_headers, outmain_code, inmain_code): #returns (code_status_bool (Did it compile & execute OK?), trimmed_cxx_output (Not program output - this should exclusively contain errors and warnings from compiling))
-  os.system('mkdir -p '+temp_directory)
+  os.system('mkdir -p '+TEMP_DIRECTORY)
 
-  src = open(temp_src_filename, 'w')
-  src_code = codewrap_top+outmain_code+codewrap_mid+inmain_code+codewrap_bottom
-  src.write(codewrap_top+outmain_code+codewrap_mid+inmain_code+codewrap_bottom)
+  src = open(TEMP_SRC_FILENAME, 'w')
+  src_code = CODEWRAP_TOP+outmain_code+CODEWRAP_MID+inmain_code+CODEWRAP_BOTTOM
+  src.write(CODEWRAP_TOP+outmain_code+CODEWRAP_MID+inmain_code+CODEWRAP_BOTTOM)
   src.close()
 
   use_supermake = uses_custom_headers #custom headers included, possibly libraries that may require fancy Lflags or Cflags -- Use Supermake to handle, instead of raw gcc
 
   cmd = []
   if use_supermake:
-    cmd = ['supermake','--quiet','--no-run','--binary='+temp_bin_filename]
-    if extra_gcc_flags:
-      cmd.append('--custom='+''.join(extra_gcc_flags))
+    cmd = ['supermake','--quiet','--no-run','--binary='+TEMP_BIN_FILENAME]
+    if EXTRA_GCC_FLAGS:
+      cmd.append('--custom='+''.join(EXTRA_GCC_FLAGS))
   else: #for speed & compatibility
-    cmd = ['g++', temp_src_filename, '-o', temp_bin_filename]
-    if extra_gcc_flags:
-      cmd.extend(extra_gcc_flags)
-  compile_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=temp_directory)
+    cmd = ['g++', TEMP_SRC_FILENAME, '-o', TEMP_BIN_FILENAME]
+    if EXTRA_GCC_FLAGS:
+      cmd.extend(EXTRA_GCC_FLAGS)
+  compile_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=TEMP_DIRECTORY)
 
   compile_status = compile_proc.wait()
   compile_status_ok = compile_status == 0
@@ -80,10 +80,10 @@ def execute_wrapped_code(uses_custom_headers, outmain_code, inmain_code): #retur
   compile_err = compile_proc.stderr.read()
   compile_out = compile_proc.stdout.read()
 
-  errlog = open(temp_errlog_filename, 'w')
+  errlog = open(TEMP_ERRLOG_FILENAME, 'w')
   errlog.write(compile_err)
   errlog.close()
-  outlog = open(temp_outlog_filename, 'w')
+  outlog = open(TEMP_OUTLOG_FILENAME, 'w')
   outlog.write(compile_out)
   outlog.close()
 
@@ -99,17 +99,17 @@ def execute_wrapped_code(uses_custom_headers, outmain_code, inmain_code): #retur
   compile_err = compile_err.strip()
 
   if compile_status_ok:
-    prog_run_status_ok = subprocess.call([temp_bin_filename]) == 0
+    prog_run_status_ok = subprocess.call([TEMP_BIN_FILENAME]) == 0
     return (prog_run_status_ok, compile_out+compile_err)
 
   return (compile_status_ok, compile_out+compile_err)
 
 def adjust_gcc_line_reference(line_number, new_code_tot_lines, outmain_code_tot_lines, inmain_code_tot_lines):
-  if line_number >= codewrap_top_tot_lines+outmain_code_tot_lines+codewrap_mid_tot_lines-2:
-    line_number -= codewrap_top_tot_lines+outmain_code_tot_lines+codewrap_mid_tot_lines-2
+  if line_number >= CODEWRAP_TOP_TOT_LINES+outmain_code_tot_lines+CODEWRAP_MID_TOT_LINES-2:
+    line_number -= CODEWRAP_TOP_TOT_LINES+outmain_code_tot_lines+CODEWRAP_MID_TOT_LINES-2
     line_number -= inmain_code_tot_lines-1
   else:
-    line_number -= codewrap_top_tot_lines
+    line_number -= CODEWRAP_TOP_TOT_LINES
     line_number -= outmain_code_tot_lines-1
 
   line_number += new_code_tot_lines
@@ -183,37 +183,38 @@ def main():
           new_code = new_code[:-1]
 
         new_line = raw_input("... ")
-        input_history.append(new_line)
         new_code += '\n'+new_line
 
+      if not new_code.strip():
+        continue;
+
+      #if not new_code.endswith(';'):
+      #  new_code += ';'
+
+      new_code += '\n'
+
+      new_code_inmain = determine_if_code_needs_main(new_code)
+      outmain_code = outmain_code_history
+      inmain_code = inmain_code_history
+      if new_code_inmain:
+        inmain_code += new_code
       else:
-        #if not new_code.endswith(';'):
-        #  new_code += ';'
+        outmain_code += new_code
 
-        new_code += '\n'
+      uses_custom_headers = outmain_code.find('#include') != -1
 
-        new_code_inmain = determine_if_code_needs_main(new_code)
-        outmain_code = outmain_code_history
-        inmain_code = inmain_code_history
+      new_auto_headers = determine_needed_headers(new_code);
+      outmain_code = '\n'.join(auto_headers.union(new_auto_headers))+'\n'+outmain_code
+
+      (code_status, compile_out) = execute_wrapped_code(uses_custom_headers, outmain_code, inmain_code)
+      if compile_out:
+        print(adjust_gcc_line_references(compile_out, len(new_code.split('\n')), len(outmain_code.split('\n')), len(inmain_code.split('\n'))))
+      if code_status: #there were no errors
+        auto_headers = auto_headers.union(new_auto_headers)
         if new_code_inmain:
-          inmain_code += new_code
+          inmain_code_history += parse_persistant_code(new_code)
         else:
-          outmain_code += new_code
-
-        uses_custom_headers = outmain_code.find('#include') != -1
-
-        new_auto_headers = determine_needed_headers(new_code);
-        outmain_code = '\n'.join(auto_headers.union(new_auto_headers))+'\n'+outmain_code
-
-        (code_status, compile_out) = execute_wrapped_code(uses_custom_headers, outmain_code, inmain_code)
-        if compile_out:
-          print(adjust_gcc_line_references(compile_out, len(new_code.split('\n')), len(outmain_code.split('\n')), len(inmain_code.split('\n'))))
-        if code_status: #there were no errors
-          auto_headers = auto_headers.union(new_auto_headers)
-          if new_code_inmain:
-            inmain_code_history += parse_persistant_code(new_code)
-          else:
-            outmain_code_history += parse_persistant_code(new_code)
+          outmain_code_history += parse_persistant_code(new_code)
 
   except (KeyboardInterrupt, EOFError):
     print('')
