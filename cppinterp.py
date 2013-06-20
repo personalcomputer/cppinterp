@@ -7,6 +7,7 @@ import os
 import sys
 import subprocess
 import re
+import readline
 
 temp_directory = '/tmp/cppinterp'
 temp_src_filename_nopath = 'cppinterp.cpp'
@@ -40,9 +41,9 @@ def clean_gcc_error_from_wrapped_code(error, src):
   error = re.sub(r' In function ‘int main\(\)’:\n', '', error)
 
   #Completely rewrite any errors that look like "error: expected ‘;’ before ‘return’" so that they make sense within the contex tof what the user wrote, dropping the reference to return statement they didn't write.
-  error = re.sub(str(src_tot_lines-2)+r':3: error: expected (‘.+’|\w+) before ‘return’', str(src_tot_lines-3)+':'+str(len(src_lines[src_tot_lines-4])+1)+r': error: expected \1', error)
+  error = re.sub(str(src_tot_lines-2)+r':3: error: expected (‘.+’|[\w-]+) before ‘return’', str(src_tot_lines-3)+':'+str(len(src_lines[src_tot_lines-4])+1)+r': error: expected \1', error)
 
-  error = re.sub('compilation terminated.\n\s*\n?','',error)
+  error = re.sub('compilation terminated.\n','',error)
 
   return error
 
@@ -164,19 +165,9 @@ def main():
     auto_headers = set([])
     outmain_code_history = "" #code that should be placed raw in the file
     inmain_code_history = "" #code that should be placed within a function (the main function) in order to execute
-    input_history = []
 
     while True:
       new_code = raw_input(">>> ")
-      history_itr = 0
-      while new_code.endswith(chr(0x1B)+'[A'):
-        history_itr += 1
-        if history_itr <= len(input_history):
-          new_code = input_history[-history_itr]+raw_input(">>> "+input_history[-history_itr])
-        else:
-          new_code = raw_input(">>> ")
-
-      input_history.append(new_code)
 
       if re.match(r'\.?cl(ear|s)', new_code):
         os.system(OS_CLEAR_CMD)
