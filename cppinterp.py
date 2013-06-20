@@ -9,14 +9,17 @@ import subprocess
 import re
 import readline
 
+USAGE = '''Usage: cppinterp [CXX_OPTIONS]
+Launches a C++ REPL-like environment.
+
+More info: <https://github.com/personalcomputer/cppinterp>'''
+
 TEMP_DIRECTORY = '/tmp/cppinterp'
 TEMP_SRC_FILENAME_NOPATH = 'cppinterp.cpp'
 TEMP_SRC_FILENAME = TEMP_DIRECTORY+'/'+TEMP_SRC_FILENAME_NOPATH
 TEMP_BIN_FILENAME = TEMP_DIRECTORY+'/cppinterp.run'
 TEMP_ERRLOG_FILENAME = TEMP_DIRECTORY+'/cxx_err.log'
 TEMP_OUTLOG_FILENAME = TEMP_DIRECTORY+'/cxx_out.log'
-
-EXTRA_GCC_FLAGS = []#, '-std=c++11']
 
 CODEWRAP_TOP = '''using namespace std;
 '''
@@ -30,6 +33,8 @@ CODEWRAP_TOP_TOT_LINES = len(CODEWRAP_TOP.split('\n'))
 CODEWRAP_MID_TOT_LINES = len(CODEWRAP_MID.split('\n'))
 
 OS_CLEAR_CMD = {'nt':'cls', 'posix':'clear'}[os.name]
+
+HELP_ARGUMENTS = set(['--help', '-help', '-h', '--h', 'h', '-?', 'help', '/h', '/?', '?', 'HELP'])
 
 
 def clean_gcc_error_from_wrapped_code(error, src):
@@ -53,7 +58,7 @@ def strip_make_output(compile_output):
   compile_output = re.sub(r'rm -f .+', '', compile_output)
   return compile_output
 
-def execute_wrapped_code(uses_custom_headers, outmain_code, inmain_code): #returns (code_status_bool (Did it compile & execute OK?), trimmed_cxx_output (Not program output - this should exclusively contain errors and warnings from compiling))
+def execute_wrapped_code(uses_custom_headers, outmain_code, inmain_code, extra_gcc_flags): #returns (code_status_bool (Did it compile & execute OK?), trimmed_cxx_output (Not program output - this should exclusively contain errors and warnings from compiling))
   os.system('mkdir -p '+TEMP_DIRECTORY)
 
   src = open(TEMP_SRC_FILENAME, 'w')
@@ -66,12 +71,12 @@ def execute_wrapped_code(uses_custom_headers, outmain_code, inmain_code): #retur
   cmd = []
   if use_supermake:
     cmd = ['supermake','--quiet','--no-run','--binary='+TEMP_BIN_FILENAME]
-    if EXTRA_GCC_FLAGS:
-      cmd.append('--custom='+''.join(EXTRA_GCC_FLAGS))
+    if extra_gcc_flags:
+      cmd.append('--custom='+''.join(extra_gcc_flags))
   else: #for speed & compatibility
     cmd = ['g++', TEMP_SRC_FILENAME, '-o', TEMP_BIN_FILENAME]
-    if EXTRA_GCC_FLAGS:
-      cmd.extend(EXTRA_GCC_FLAGS)
+    if extra_gcc_flags:
+      cmd.extend(extra_gcc_flags)
   compile_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=TEMP_DIRECTORY)
 
   compile_status = compile_proc.wait()
@@ -153,6 +158,20 @@ def parse_persistant_code(code):
 
 def main():
   try:
+    if HELP_ARGUMENTS & set(sys.argv[1:]):
+      print(USAGE)
+      sys.exit(0)
+
+    extra_gcc_flags = sys.argv[1:];
+
+    if extra_gcc_flags:
+      #quickly test to make sure they are valid
+      (code_status, compile_out) = execute_wrapped_code(False,'','',extra_gcc_flags)
+      if not code_status:
+        print(compile_out)
+        sys.exit(1)
+
+
     #Basic flow:
     #-> Render prompt ">>>"
     #-> Wait for user to hit [ENTER]
@@ -206,7 +225,7 @@ def main():
       new_auto_headers = determine_needed_headers(new_code);
       outmain_code = '\n'.join(auto_headers.union(new_auto_headers))+'\n'+outmain_code
 
-      (code_status, compile_out) = execute_wrapped_code(uses_custom_headers, outmain_code, inmain_code)
+      (code_status, compile_out) = execute_wrapped_code(uses_custom_headers, outmain_code, inmain_code, extra_gcc_flags)
       if compile_out:
         print(adjust_gcc_line_references(compile_out, len(new_code.split('\n')), len(outmain_code.split('\n')), len(inmain_code.split('\n'))))
       if code_status: #there were no errors
