@@ -165,9 +165,9 @@ def parse_persistant_code(code):
 
   #This currently only supports std::cout, and probably won't ever support much more.
 
-  persistant_code = re.sub(r'\s*<<', ';\n', re.sub(r'(?:std::)?cout\s*<<\s*((?:\s*.+\s*<<)+\s*.+\s*)', r'\1', code))
+  persistant_code = re.sub(r'\s*<<', ';\n', re.sub(r'(?:std::)?(?:cout|cerr)\s*<<\s*((?:\s*.+\s*<<)+\s*.+\s*)', r'\1', code))
   persistant_code = re.sub(r'\s*(std::)?endl\s*;', '', persistant_code)
-  persistant_code = re.sub(r'printf\(".+"\s*,?((?:.+\s*,\s*)*.+)\s*\);', lambda m: ''.join([stmt+';\n' for stmt in m.group(1).split(',')]), persistant_code)
+  persistant_code = re.sub(r'(?:(?:printf\(".+"\s*,?)|fputs\(|puts\()((?:.+\s*,\s*)*.+)\s*\);', lambda m: ''.join([stmt+';\n' for stmt in m.group(1).split(',')]), persistant_code)
 
   return persistant_code
 
