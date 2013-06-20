@@ -21,7 +21,8 @@ TEMP_BIN_FILENAME = TEMP_DIRECTORY+'/cppinterp.run'
 TEMP_ERRLOG_FILENAME = TEMP_DIRECTORY+'/cxx_err.log'
 TEMP_OUTLOG_FILENAME = TEMP_DIRECTORY+'/cxx_out.log'
 
-CODEWRAP_TOP = '''using namespace std;
+CODEWRAP_TOP = '''#include <iostream>
+using namespace std;
 '''
 CODEWRAP_MID = '''int main()
 {
@@ -35,7 +36,6 @@ CODEWRAP_MID_TOT_LINES = len(CODEWRAP_MID.split('\n'))
 OS_CLEAR_CMD = {'nt':'cls', 'posix':'clear'}[os.name]
 
 HELP_ARGUMENTS = set(['--help', '-help', '-h', '--h', 'h', '-?', 'help', '/h', '/?', '?', 'HELP'])
-
 
 def clean_gcc_error_from_wrapped_code(error, src):
   src_lines = src.split('\n')
@@ -58,7 +58,7 @@ def strip_make_output(compile_output):
   compile_output = re.sub(r'rm -f .+', '', compile_output)
   return compile_output
 
-def execute_wrapped_code(uses_custom_headers, outmain_code, inmain_code, extra_gcc_flags): #returns (code_status_bool (Did it compile & execute OK?), trimmed_cxx_output (Not program output - this should exclusively contain errors and warnings from compiling))
+def execute_wrapped_code(uses_custom_headers, outmain_code, inmain_code, extra_gcc_flags): #returns (code_status_bool (Did it compile & execute OK?), trimmed_err, trimmed_out (Not program output - this should exclusively contain errors and warnings from compiling))
   os.system('mkdir -p '+TEMP_DIRECTORY)
 
   src = open(TEMP_SRC_FILENAME, 'w')
@@ -68,16 +68,22 @@ def execute_wrapped_code(uses_custom_headers, outmain_code, inmain_code, extra_g
 
   use_supermake = uses_custom_headers #custom headers included, possibly libraries that may require fancy Lflags or Cflags -- Use Supermake to handle, instead of raw gcc
 
-  cmd = []
+  supermake_cmd = ['supermakea','--quiet','--no-run','--binary='+TEMP_BIN_FILENAME]
+  if extra_gcc_flags:
+    supermake_cmd.append('--custom='+''.join(extra_gcc_flags))
+
+  gcc_cmd = ['g++', TEMP_SRC_FILENAME, '-o', TEMP_BIN_FILENAME]
+  if extra_gcc_flags:
+    gcc_cmd.extend(extra_gcc_flags)
+
+  compile_proc = None
   if use_supermake:
-    cmd = ['supermake','--quiet','--no-run','--binary='+TEMP_BIN_FILENAME]
-    if extra_gcc_flags:
-      cmd.append('--custom='+''.join(extra_gcc_flags))
-  else: #for speed & compatibility
-    cmd = ['g++', TEMP_SRC_FILENAME, '-o', TEMP_BIN_FILENAME]
-    if extra_gcc_flags:
-      cmd.extend(extra_gcc_flags)
-  compile_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=TEMP_DIRECTORY)
+    try:
+      compile_proc = subprocess.Popen(supermake_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=TEMP_DIRECTORY)
+    except OSError:
+      compile_proc = subprocess.Popen(gcc_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=TEMP_DIRECTORY)
+  else:
+    compile_proc = subprocess.Popen(gcc_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=TEMP_DIRECTORY)
 
   compile_status = compile_proc.wait()
   compile_status_ok = compile_status == 0
@@ -105,9 +111,9 @@ def execute_wrapped_code(uses_custom_headers, outmain_code, inmain_code, extra_g
 
   if compile_status_ok:
     prog_run_status_ok = subprocess.call([TEMP_BIN_FILENAME]) == 0
-    return (prog_run_status_ok, compile_out+compile_err)
+    return (prog_run_status_ok, compile_err, compile_out)
 
-  return (compile_status_ok, compile_out+compile_err)
+  return (compile_status_ok, compile_err, compile_out)
 
 def adjust_gcc_line_reference(line_number, new_code_tot_lines, outmain_code_tot_lines, inmain_code_tot_lines):
   if line_number >= CODEWRAP_TOP_TOT_LINES+outmain_code_tot_lines+CODEWRAP_MID_TOT_LINES-2:
@@ -121,8 +127,16 @@ def adjust_gcc_line_reference(line_number, new_code_tot_lines, outmain_code_tot_
 
   return line_number
 
+def adjust_gcc_errline(matchobj, new_code_tot_lines, outmain_code_tot_lines, inmain_code_tot_lines):
+  line_number = int(matchobj.group(1))
+  line_number = adjust_gcc_line_reference(line_number, new_code_tot_lines, outmain_code_tot_lines, inmain_code_tot_lines)
+  if line_number > 0:
+    return str(line_number)+matchobj.group(2)
+  else:
+    return ''
+
 def adjust_gcc_line_references(errors, new_code_tot_lines, outmain_code_tot_lines, inmain_code_tot_lines): #line references are relative to their position in either inmain_code or outmain_code, depending on where the error (line reference) is
-  return re.sub(r'(\d+):(\d+):', lambda matchobj: str(adjust_gcc_line_reference(int(matchobj.group(1)), new_code_tot_lines, outmain_code_tot_lines, inmain_code_tot_lines))+':'+matchobj.group(2)+':', errors)
+  return re.sub(r'(\d+)(:\d+: .+\n?)', lambda matchobj: adjust_gcc_errline(matchobj, new_code_tot_lines, outmain_code_tot_lines, inmain_code_tot_lines), errors)
 
 def determine_if_code_needs_main(code): #Determine if the code is a declaration/definition/include or if it is instructions that are intended to be ran within a function ('needs main')
   if re.match(r'\s*\#include', code):
@@ -137,8 +151,8 @@ def determine_needed_headers(code): #hueristic to speed things up
   needed_headers = set([])
   if re.search('(std::)?string ', code):
     needed_headers.add('#include <string>')
-  if re.search('(std::)?(cout|endl|cin)', code):
-    needed_headers.add('#include <iostream>')
+  #if re.search('(std::)?(cout|endl|cin)', code):
+  #  needed_headers.add('#include <iostream>')
   if re.search('(std::)?stringstream ', code):
     needed_headers.add('#include <sstream>')
   if re.search('printf\(', code):
@@ -166,9 +180,9 @@ def main():
 
     if extra_gcc_flags:
       #quickly test to make sure they are valid
-      (code_status, compile_out) = execute_wrapped_code(False,'','',extra_gcc_flags)
+      (code_status, compile_err, compile_out) = execute_wrapped_code(False,'','',extra_gcc_flags)
       if not code_status:
-        print(compile_out)
+        print(compile_err)
         sys.exit(1)
 
 
@@ -225,9 +239,9 @@ def main():
       new_auto_headers = determine_needed_headers(new_code);
       outmain_code = '\n'.join(auto_headers.union(new_auto_headers))+'\n'+outmain_code
 
-      (code_status, compile_out) = execute_wrapped_code(uses_custom_headers, outmain_code, inmain_code, extra_gcc_flags)
-      if compile_out:
-        print(adjust_gcc_line_references(compile_out, len(new_code.split('\n')), len(outmain_code.split('\n')), len(inmain_code.split('\n'))))
+      (code_status, compile_err, compile_out) = execute_wrapped_code(uses_custom_headers, outmain_code, inmain_code, extra_gcc_flags)
+      if compile_out or compile_err:
+        print(adjust_gcc_line_references(compile_out+compile_err, len(new_code.split('\n')), len(outmain_code.split('\n')), len(inmain_code.split('\n'))).strip())
       if code_status: #there were no errors
         auto_headers = auto_headers.union(new_auto_headers)
         if new_code_inmain:
