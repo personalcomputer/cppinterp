@@ -67,7 +67,7 @@ def execute_wrapped_code(uses_custom_headers, outmain_code, inmain_code, extra_g
 
   use_supermake = uses_custom_headers #custom headers included, possibly libraries that may require fancy Lflags or Cflags -- Use Supermake to handle, instead of raw gcc
 
-  supermake_cmd = ['supermakea','--quiet','--no-run','--binary='+TEMP_BIN_FILENAME]
+  supermake_cmd = ['supermake','--quiet','--no-run','--binary='+TEMP_BIN_FILENAME]
   if extra_gcc_flags:
     supermake_cmd.append('--custom='+''.join(extra_gcc_flags))
 
