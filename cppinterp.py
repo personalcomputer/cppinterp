@@ -196,6 +196,8 @@ def main():
     #-> Add new code to the code history that is re-executed everytime to give the appearance of persistant state
     #-> Repeat
 
+    alternative_newlines = False;
+
     auto_headers = set([])
     outmain_code_history = "" #code that should be placed raw in the file
     inmain_code_history = "" #code that should be placed within a function (the main function) in order to execute
@@ -203,14 +205,23 @@ def main():
     while True:
       new_code = raw_input(">>> ")
 
-      if re.match(r'\.?cl(ear|s)', new_code):
+      if re.match(r'^\.?cl(ear|s)$', new_code):
         os.system(OS_CLEAR_CMD)
         continue;
 
-      if re.match(r'\.?(quit|exit)', new_code):
+      if re.match(r'^(\.|\:)?((ignore|alt(ernative)?|no)[\-_ :]?newl(ines?)?)$', new_code):
+        if not alternative_newlines:
+          print("cppinterp: '\\n' now ignored. Use '\\' at the end of your code to process it.")
+          alternative_newlines = True;
+        else:
+          print("cppinterp: '\\n' now terminates segments of code. Use '\\' at the end of a line to make a multi-line code segment.")
+          alternative_newlines = False;
+        continue;
+
+      if re.match(r'^(\.?(quit|exit)|:q)$', new_code):
         break;
 
-      while new_code.endswith('...') or new_code.endswith('\\'):
+      while new_code.endswith('...') or (not alternative_newlines and new_code.endswith('\\')) or (alternative_newlines and not new_code.endswith('\\')):
         if new_code.endswith('...'):
           new_code = new_code[:-3]
         elif new_code.endswith('\\'):
